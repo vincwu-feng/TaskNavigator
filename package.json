@@ -1,0 +1,35 @@
+{
+  "name": "tasknavigator",
+  "version": "0.5.5",
+  "description": "A desktop dock that acts as a second pair of eyes on Codex / Claude Code replies: it judges every turn against what you actually asked for.",
+  "main": "main.js",
+  "keywords": [
+    "codex",
+    "claude-code",
+    "ai-agent",
+    "electron",
+    "dify",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OWNER/TaskNavigator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/OWNER/TaskNavigator/issues"
+  },
+  "homepage": "https://github.com/OWNER/TaskNavigator#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "electron .",
+    "daemon": "node daemon/index.js",
+    "test": "node tests/smoke.js",
+    "test:real": "node tests/real-chain.js"
+  },
+  "devDependencies": {
+    "electron": "28.0.0"
+  }
+}

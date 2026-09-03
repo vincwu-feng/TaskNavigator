@@ -1,0 +1,13 @@
+{
+  "host": "127.0.0.1",
+  "port": 48763,
+  "monitorPollMs": 8000,
+  "dify": {
+    "baseUrl": "http://127.0.0.1:8800",
+    "apiKeys": {
+      "eval": ""
+    },
+    "mock": true,
+    "fallbackToMock": true
+  }
+}

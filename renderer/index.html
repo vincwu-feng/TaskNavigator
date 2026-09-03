@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:48763; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<title>TaskNavigator</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="rail-mode">
+  <div id="rail" class="rail" title="展开 TaskNavigator">
+    <div class="rail-drag"></div>
+    <div class="rail-avatar">
+      <img class="avatar" src="assets/tasknavigator-mark.png" alt="TaskNavigator">
+      <span class="status-dot" id="railDot"></span>
+      <span class="rail-count" id="railCount" style="display:none"></span>
+    </div>
+  </div>
+
+  <div id="dock" class="dock">
+    <div class="panel detail" id="detailPanel">
+      <div class="panel-head">
+        <span class="title">任务详情</span>
+        <span class="spacer"></span>
+        <span class="icon-btn" id="detailClose" title="返回列表">✕</span>
+      </div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+
+    <div class="panel main" id="mainPanel">
+      <div class="panel-head drag">
+        <img class="avatar small" src="assets/tasknavigator-mark.png" alt="TaskNavigator">
+        <span class="title">TaskNavigator</span>
+        <span class="conn-dot" id="connDot" title="daemon 未连接"></span>
+        <span class="spacer"></span>
+        <span class="icon-btn no-drag" id="hideBtn" title="隐藏窗口">—</span>
+        <span class="icon-btn no-drag" id="collapseBtn" title="收起">▶</span>
+      </div>
+      <div class="tabs">
+        <div class="tab active" id="tabActive">进行中<span class="tab-dot" id="tabDot" style="display:none"></span></div>
+        <div class="tab" id="tabArchived">已归档</div>
+      </div>
+      <div class="connection-banner" id="connectionBanner" style="display:none">TaskNavigator 暂时无法获取 Codex 回复，正在重试。</div>
+      <div class="new-btn" id="newBtn">＋ 选择会话开始监控</div>
+      <div class="list" id="taskList"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>
