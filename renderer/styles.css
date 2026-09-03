@@ -89,8 +89,8 @@ body {
   flex-direction: column;
   overflow: hidden;
 }
-.panel.main { width: 340px; }
-.panel.detail { width: 340px; }
+.panel.main { width: 340px; flex: 0 0 340px; }
+.panel.detail { width: 340px; flex: 0 0 340px; }
 
 body.rail-mode #dock { display: none; }
 body.list-mode #rail { display: none; }
@@ -545,11 +545,12 @@ body.detail-mode #rail { display: none; }
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
   transform: translateY(-12px);
   opacity: 0;
-  transition: all 0.25s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease;
   z-index: 30;
   pointer-events: none;
+  visibility: hidden;
 }
-.toast.show { transform: translateY(0); opacity: 1; }
+.toast.show { transform: translateY(0); opacity: 1; visibility: visible; }
 .toast .t-head { font-size: 13px; font-weight: 600; color: var(--yellow); margin-bottom: 4px; }
 .toast .t-body { font-size: 13px; line-height: 1.5; color: var(--text); word-break: break-word; }
 
@@ -850,4 +851,4 @@ body.detail-mode .panel.detail { width: 340px; }
   font-weight: 650;
   pointer-events: auto;
 }
-.toast:has(.toast-action) { pointer-events: auto; }
+.toast.show:has(.toast-action) { pointer-events: auto; }

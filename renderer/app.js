@@ -5,6 +5,8 @@
     detailOpen: new Set(), selectedSessionIndex: 0, pickerPlatform: null
   };
   let pendingMode = null;
+  let appliedMode = 'rail';
+  const MODE_WIDTH = { rail: 72, list: 340, detail: 680 };
   let toastTimer;
 
   const $ = selector => document.querySelector(selector);
@@ -76,19 +78,34 @@
     $('#toast').classList.add('show');
     if (action) $('#toastAction').addEventListener('click', () => { action.run(); $('#toast').classList.remove('show'); });
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => $('#toast').classList.remove('show'), action ? 5200 : 3200);
+    toastTimer = setTimeout(() => { const t = $('#toast'); t.classList.remove('show'); setTimeout(() => { if (!t.classList.contains('show')) t.innerHTML = ''; }, 300); }, action ? 5200 : 3200);
+  }
+
+  function applyModeClass(mode) {
+    document.body.className = `${mode}-mode`;
+    appliedMode = mode;
   }
 
   function setMode(mode) {
     if (!window.tasknav || !window.tasknav.setWindowMode) {
-      document.body.className = `${mode}-mode`;
+      applyModeClass(mode);
       return;
     }
+    const growing = (MODE_WIDTH[mode] || 0) > (MODE_WIDTH[appliedMode] || 0);
+    if (growing) {
+      // Lay out the wider UI before the frame widens, otherwise the extra
+      // width paints as empty background for a few frames (visible flash).
+      pendingMode = null;
+      applyModeClass(mode);
+      window.tasknav.setWindowMode(mode);
+      return;
+    }
+    // Shrinking: narrow the frame first, then drop the wider layout.
     pendingMode = mode;
     window.tasknav.setWindowMode(mode);
     setTimeout(() => {
       if (pendingMode === mode) {
-        document.body.className = `${mode}-mode`;
+        applyModeClass(mode);
         pendingMode = null;
       }
     }, 260);
@@ -97,7 +114,7 @@
   if (window.tasknav && window.tasknav.onWindowModeApplied) {
     window.tasknav.onWindowModeApplied(mode => {
       if (pendingMode === mode) {
-        document.body.className = `${mode}-mode`;
+        applyModeClass(mode);
         pendingMode = null;
       }
     });
