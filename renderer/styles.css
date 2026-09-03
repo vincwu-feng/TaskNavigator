@@ -16,7 +16,10 @@
 html, body { height: 100%; }
 body {
   font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  background: var(--bg);
+  /* Match the panel fill: on window resize the newly exposed strip is painted
+     with the body background before the renderer produces a frame at the new
+     size. Using --bg (darker) made that gap visible as a flash. */
+  background: var(--panel);
   color: var(--text);
   overflow: hidden;
   user-select: none;
