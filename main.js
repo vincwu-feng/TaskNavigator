@@ -1,60 +1,61 @@
 const { app, BrowserWindow, screen, ipcMain, clipboard, shell } = require('electron');
 const path = require('path');
 
-// The overlay used to resize the OS window on every mode switch
-// (rail 72 -> list 340 -> detail 680). Windows repaints the frame at the new
-// geometry before the renderer can deliver a frame for that size, so every
-// switch flashed. The window is now one fixed-size transparent surface docked
-// to the right edge of the work area; switching modes only toggles CSS inside
-// the renderer, which is applied atomically and cannot tear.
-const OVERLAY_WIDTH = 680;
-const MODES = ['rail', 'list', 'detail'];
+const MODES = {
+  rail: { width: 72, height: 84 },
+  list: { width: 340, height: null },
+  detail: { width: 680, height: null }
+};
 
 let win = null;
 let currentMode = 'rail';
-let ignoringMouse = null;
 
 function workArea() {
   return screen.getPrimaryDisplay().workArea;
 }
 
-function overlayBounds() {
+function placeWindow(mode) {
+  if (!win) return;
   const area = workArea();
-  return {
-    x: area.x + area.width - OVERLAY_WIDTH,
-    y: area.y,
-    width: OVERLAY_WIDTH,
-    height: area.height
-  };
+  const spec = MODES[mode];
+  const width = spec.width;
+  const height = spec.height || area.height;
+  const x = area.x + area.width - width;
+  const y = area.y + (mode === 'rail' ? area.height - spec.height - 28 : 0);
+  win.setBounds({ x, y, width, height });
 }
 
-function dockWindow() {
+let revealTimer = null;
+
+// Switching modes resizes the frame. On Windows the newly exposed strip is
+// filled with the window background before Chromium can raster content at the
+// new size, and that intermediate state is what reads as a flash. Hiding the
+// frame across the resize and revealing it only once the renderer reports a
+// painted frame means the user never sees a partially drawn panel.
+function applyMode(mode) {
   if (!win || win.isDestroyed()) return;
-  win.setBounds(overlayBounds());
+  win.setOpacity(0);
+  placeWindow(mode);
+  win.webContents.send('window-mode-applied', mode);
+  clearTimeout(revealTimer);
+  // Fallback: never leave the window invisible if the renderer stays silent.
+  revealTimer = setTimeout(() => revealMode(mode), 250);
 }
 
-// Only the painted panels should catch the mouse; the rest of the fixed frame
-// is transparent and has to stay click-through. Mouse move messages are
-// forwarded while ignoring, so the renderer can tell when the pointer crosses
-// into a painted area and flip this back.
-function setIgnoreMouse(ignore) {
+function revealMode(mode) {
+  clearTimeout(revealTimer);
   if (!win || win.isDestroyed()) return;
-  if (ignoringMouse === ignore) return;
-  ignoringMouse = ignore;
-  win.setIgnoreMouseEvents(ignore, { forward: true });
+  if (currentMode !== mode) return;
+  win.setOpacity(1);
 }
 
 function createWindow() {
-  const bounds = overlayBounds();
   win = new BrowserWindow({
-    x: bounds.x,
-    y: bounds.y,
-    width: bounds.width,
-    height: bounds.height,
+    width: MODES.rail.width,
+    height: MODES.rail.height,
     frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
-    hasShadow: false,
+    transparent: false,
+    backgroundColor: '#161922',
     icon: path.join(__dirname, 'renderer', 'assets', 'tasknavigator-mark.png'),
     alwaysOnTop: true,
     skipTaskbar: true,
@@ -69,10 +70,8 @@ function createWindow() {
     }
   });
   win.setAlwaysOnTop(true, 'screen-saver');
-  setIgnoreMouse(true);
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.once('ready-to-show', () => {
-    dockWindow();
     win.show();
     win.focus();
   });
@@ -97,18 +96,14 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     createWindow();
-    screen.on('display-metrics-changed', dockWindow);
-    screen.on('display-added', dockWindow);
-    screen.on('display-removed', dockWindow);
+    placeWindow('rail');
     ipcMain.on('window-mode', (_e, mode) => {
-      // No resize here on purpose: the frame stays put, the renderer owns the
-      // visible size of each mode.
-      if (!MODES.includes(mode)) return;
+      if (!MODES[mode]) return;
       currentMode = mode;
-      if (win && !win.isDestroyed()) win.webContents.send('window-mode-applied', mode);
+      applyMode(mode);
     });
-    ipcMain.on('set-ignore-mouse', (_e, ignore) => {
-      setIgnoreMouse(!!ignore);
+    ipcMain.on('window-mode-painted', (_e, mode) => {
+      revealMode(mode);
     });
     ipcMain.on('window-hide', () => {
       win.hide();

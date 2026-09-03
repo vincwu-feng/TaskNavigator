@@ -74,73 +74,36 @@
   function toast(title, body, action) {
     $('#toast').innerHTML = `<div class="t-head">${esc(title)}</div><div class="t-body">${esc(body || '')}</div>${action ? `<button class="toast-action" id="toastAction">${esc(action.label)}</button>` : ''}`;
     $('#toast').classList.add('show');
-    if (action) $('#toastAction').addEventListener('click', () => { action.run(); $('#toast').classList.remove('show'); refreshHitRegion(); });
+    if (action) $('#toastAction').addEventListener('click', () => { action.run(); $('#toast').classList.remove('show'); });
     clearTimeout(toastTimer);
-    refreshHitRegion();
-    toastTimer = setTimeout(() => { const t = $('#toast'); t.classList.remove('show'); refreshHitRegion(); setTimeout(() => { if (!t.classList.contains('show')) t.innerHTML = ''; }, 300); }, action ? 5200 : 3200);
+    toastTimer = setTimeout(() => { const t = $('#toast'); t.classList.remove('show'); setTimeout(() => { if (!t.classList.contains('show')) t.innerHTML = ''; }, 300); }, action ? 5200 : 3200);
   }
-
-  // The frame never changes size, so the only thing that has to be tracked is
-  // which painted rectangles may swallow the mouse. Everything else in the
-  // fixed overlay is transparent and reported as click-through.
-  const HIT_PAD = 6;
-  const pointer = { x: -1, y: -1, inside: false };
-  let ignoringMouse = null;
-
-  function opaqueRects() {
-    const rects = [];
-    const painted = appliedMode === 'rail'
-      ? [$('#rail')]
-      : Array.from(document.querySelectorAll('#dock .panel'));
-    painted.forEach(el => {
-      if (el && el.offsetParent !== null) rects.push(el.getBoundingClientRect());
-    });
-    const toastEl = $('#toast');
-    if (toastEl && toastEl.classList.contains('show') && toastEl.querySelector('.toast-action')) {
-      rects.push(toastEl.getBoundingClientRect());
-    }
-    return rects;
-  }
-
-  function refreshHitRegion() {
-    if (!window.tasknav || !window.tasknav.setIgnoreMouse) return;
-    const hit = pointer.inside && opaqueRects().some(rect =>
-      pointer.x >= rect.left - HIT_PAD && pointer.x <= rect.right + HIT_PAD &&
-      pointer.y >= rect.top - HIT_PAD && pointer.y <= rect.bottom + HIT_PAD);
-    const ignore = !hit;
-    if (ignore === ignoringMouse) return;
-    ignoringMouse = ignore;
-    window.tasknav.setIgnoreMouse(ignore);
-  }
-
-  function pointerLeft() {
-    if (!pointer.inside) return;
-    pointer.inside = false;
-    refreshHitRegion();
-  }
-
-  window.addEventListener('mousemove', event => {
-    pointer.x = event.clientX;
-    pointer.y = event.clientY;
-    pointer.inside = true;
-    refreshHitRegion();
-  }, true);
-  window.addEventListener('mouseout', event => {
-    if (!event.relatedTarget) pointerLeft();
-  }, true);
-  document.addEventListener('mouseleave', pointerLeft);
 
   function applyModeClass(mode) {
     document.body.className = `${mode}-mode`;
     appliedMode = mode;
-    refreshHitRegion();
   }
 
-  // One synchronous class swap. No window resize, no waiting on the main
-  // process, so a mode switch can never be seen half-applied.
   function setMode(mode) {
-    applyModeClass(mode);
-    if (window.tasknav && window.tasknav.setWindowMode) window.tasknav.setWindowMode(mode);
+    if (!window.tasknav || !window.tasknav.setWindowMode) {
+      applyModeClass(mode);
+      return;
+    }
+    // The main process hides the frame, resizes it, and waits for the painted
+    // confirmation below before showing it again, so the order here is simply:
+    // ask for the resize, then lay out when told the frame is the right size.
+    window.tasknav.setWindowMode(mode);
+  }
+
+  if (window.tasknav && window.tasknav.onWindowModeApplied) {
+    window.tasknav.onWindowModeApplied(mode => {
+      applyModeClass(mode);
+      // Two frames: the first commits the new layout, the second guarantees it
+      // has actually been rastered before the window becomes visible again.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (window.tasknav.notifyModePainted) window.tasknav.notifyModePainted(mode);
+      }));
+    });
   }
 
   function setConn(connected) {
