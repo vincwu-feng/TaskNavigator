@@ -148,7 +148,7 @@
     const dot = $('#connDot');
     dot.classList.toggle('online', connected);
     dot.classList.toggle('offline', !connected);
-    dot.title = connected ? '连接正常' : '暂时无法获取 Codex 回复';
+    dot.setAttribute('data-tip', connected ? '连接正常' : '暂时无法获取 Codex 回复');
     $('#connectionBanner').style.display = connected ? 'none' : 'block';
   }
 
@@ -237,9 +237,9 @@
       return `<div class="task ${task.status !== 'ok' ? 'actionable' : ''} ${String(state.selectedId) === String(task.id) ? 'selected' : ''}" data-id="${esc(task.id)}">
         ${task.unread && task.status !== 'ok' ? '<span class="unread-dot"></span>' : ''}
         <div class="acts"><button class="act" data-act="archive">归档</button><button class="act del" data-act="del">删除</button></div>
-        <div class="task-head"><img class="source-icon" src="${sourceIcon(task)}" alt="${sourceLabel(task)}"><span class="goal" title="${esc(task.sessionTitle)}">${esc(task.sessionTitle)}</span></div>
+        <div class="task-head"><img class="source-icon" src="${sourceIcon(task)}" alt="${sourceLabel(task)}"><span class="goal" data-tip="${esc(task.sessionTitle)}">${esc(task.sessionTitle)}</span></div>
         <div class="task-state-row"><span class="badge ${visual.cls}">${visual.label}</span><span class="task-source-text">${sourceLabel(task)}</span><span class="task-time">${esc(relativeTime(task.updatedAt))}</span></div>
-        <div class="task-ask"><span>本轮提问</span><div title="${esc(askedText)}">${esc(short(askedText, 112))}</div></div>
+        <div class="task-ask"><span>本轮提问</span><div data-tip="${esc(askedText)}">${esc(short(askedText, 112))}</div></div>
         <div class="task-result-box ${visual.cls}">
           <div class="task-status">${esc(statusMessage(task.status))}</div>
           <div class="task-reason">${esc(short(task.reason || task.currentIntent || '等待下一轮回复', 150))}</div>
@@ -522,7 +522,7 @@
     renderPicker();
   }
 
-  $('#rail').addEventListener('pointerdown', () => setMode('list'));
+  $('#rail').addEventListener('pointerdown', event => { if (!(event.target.closest && event.target.closest('.rail-drag'))) setMode('list'); });
   $('#collapseBtn').addEventListener('click', () => { state.selectedId = null; setMode('rail'); });
   $('#hideBtn').addEventListener('click', () => { if (window.tasknav) window.tasknav.hideWindow(); });
   $('#detailClose').addEventListener('click', closeDetail);
