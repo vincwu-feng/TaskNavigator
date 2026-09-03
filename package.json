@@ -14,12 +14,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/OWNER/TaskNavigator.git"
+    "url": "https://github.com/YOUR_USERNAME/TaskNavigator.git"
   },
   "bugs": {
-    "url": "https://github.com/OWNER/TaskNavigator/issues"
+    "url": "https://github.com/YOUR_USERNAME/TaskNavigator/issues"
   },
-  "homepage": "https://github.com/OWNER/TaskNavigator#readme",
+  "homepage": "https://github.com/YOUR_USERNAME/TaskNavigator#readme",
   "engines": {
     "node": ">=18"
   },

@@ -30,6 +30,27 @@
 
 ---
 
+## 关于模型调用 / Bring your own model
+
+> **本项目不内置、不代理、不代付任何模型 API。作者不提供任何托管服务或共享 key。**
+>
+> **This project ships no model API, no proxy, and no shared key. The author hosts nothing for you.**
+
+| 模式 | 需要什么 | 效果 |
+|---|---|---|
+| 本地规则模式（默认） | 什么都不需要，零 key、零外部服务 | 假完成检测、空转检测、证据链、话术生成全部可用 |
+| 语义增强模式（可选） | 你自己的 Dify 实例 + 你自己的 workflow key | 额外增加“本轮语义是否对齐”的判断与指代回溯 |
+
+实现上的三重保证：
+
+1. config.example.json 默认 mock: true 且 apiKeys.eval 为空 —— clone 下来默认不发出任何网络请求。
+2. 默认 baseUrl 是 http://127.0.0.1:8800，即你自己机器上的 localhost，与作者环境无任何关联。
+3. config.json（存放 key 的文件）在 .gitignore 中，仓库内不存在，也永远不会被提交。
+
+即使你完全不配置 Dify，核心卖点（用客观证据判断“AI 是不是在糊弄你”）也完整可用，因为那一层是零 LLM 的本地规则引擎。
+
+---
+
 ## 效果 / What you actually see
 
 绑定一个已有会话后，屏幕右侧常驻一条监督栏。每轮 AI 回复结束，亮一个状态灯，点开是一句可直接复制的话术：

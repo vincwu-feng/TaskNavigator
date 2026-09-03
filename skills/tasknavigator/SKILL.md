@@ -47,6 +47,22 @@ TaskNavigator 是一个桌面停靠条（Electron app + Node daemon），绑定�
   → SSE 刷新桌面停靠条
 ```
 
+## 模型调用说明（重要）
+
+> 本技能**不内置、不代理、不代付任何模型 API**。作者不提供托管服务，也不共享任何 key。
+
+两种运行模式，安装时二选一：
+
+| 模式 | 需要什么 | 能力 |
+|---|---|---|
+| 本地规则模式（默认） | 零 key、零外部服务、零网络请求 | 假完成检测、空转检测、证据链、话术生成 |
+| 语义增强模式（可选） | 用户自建的 Dify 实例 + 自己的 workflow key | 额外增加语义对齐判断与指代回溯 |
+
+安装后 config.json 默认 `mock: true` 且 `apiKeys.eval` 为空，因此**不配置任何东西也能直接跑**，且不会向任何外部服务发送数据。
+默认 `baseUrl` 为 `http://127.0.0.1:8800`，指向用户自己机器上的 localhost。
+
+---
+
 ## 安装
 
 ### 前提条件
@@ -60,7 +76,7 @@ TaskNavigator 是一个桌面停靠条（Electron app + Node daemon），绑定�
 ```powershell
 # 1. Clone 仓库
 cd ~
-git clone https://github.com/OWNER/TaskNavigator.git
+git clone https://github.com/YOUR_USERNAME/TaskNavigator.git
 cd TaskNavigator
 
 # 2. 安装依赖 + 创建配置
@@ -93,7 +109,7 @@ npm test
 |---|---|
 | `dify.mock` | `true` = 不使用 Dify，纯本地规则 |
 | `dify.fallbackToMock` | 即使 Dify 调用失败也降级为本地规则 |
-| `dify.apiKeys.eval` | 你的 Dify tn_eval workflow API key |
+安装后 config.json 默认 `mock: true` 且 `apiKeys.eval` 为空，因此**不配置任何东西也能直接跑**，且不会向任何外部服务发送数据。
 
 ## 使用流程
 
