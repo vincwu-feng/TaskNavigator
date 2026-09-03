@@ -4,9 +4,7 @@
     tasks: [], archived: [], view: 'active', selectedId: null, connected: false,
     detailOpen: new Set(), selectedSessionIndex: 0, pickerPlatform: null
   };
-  let pendingMode = null;
   let appliedMode = 'rail';
-  const MODE_WIDTH = { rail: 72, list: 340, detail: 680 };
   let toastTimer;
 
   const $ = selector => document.querySelector(selector);
@@ -76,48 +74,73 @@
   function toast(title, body, action) {
     $('#toast').innerHTML = `<div class="t-head">${esc(title)}</div><div class="t-body">${esc(body || '')}</div>${action ? `<button class="toast-action" id="toastAction">${esc(action.label)}</button>` : ''}`;
     $('#toast').classList.add('show');
-    if (action) $('#toastAction').addEventListener('click', () => { action.run(); $('#toast').classList.remove('show'); });
+    if (action) $('#toastAction').addEventListener('click', () => { action.run(); $('#toast').classList.remove('show'); refreshHitRegion(); });
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { const t = $('#toast'); t.classList.remove('show'); setTimeout(() => { if (!t.classList.contains('show')) t.innerHTML = ''; }, 300); }, action ? 5200 : 3200);
+    refreshHitRegion();
+    toastTimer = setTimeout(() => { const t = $('#toast'); t.classList.remove('show'); refreshHitRegion(); setTimeout(() => { if (!t.classList.contains('show')) t.innerHTML = ''; }, 300); }, action ? 5200 : 3200);
   }
+
+  // The frame never changes size, so the only thing that has to be tracked is
+  // which painted rectangles may swallow the mouse. Everything else in the
+  // fixed overlay is transparent and reported as click-through.
+  const HIT_PAD = 6;
+  const pointer = { x: -1, y: -1, inside: false };
+  let ignoringMouse = null;
+
+  function opaqueRects() {
+    const rects = [];
+    const painted = appliedMode === 'rail'
+      ? [$('#rail')]
+      : Array.from(document.querySelectorAll('#dock .panel'));
+    painted.forEach(el => {
+      if (el && el.offsetParent !== null) rects.push(el.getBoundingClientRect());
+    });
+    const toastEl = $('#toast');
+    if (toastEl && toastEl.classList.contains('show') && toastEl.querySelector('.toast-action')) {
+      rects.push(toastEl.getBoundingClientRect());
+    }
+    return rects;
+  }
+
+  function refreshHitRegion() {
+    if (!window.tasknav || !window.tasknav.setIgnoreMouse) return;
+    const hit = pointer.inside && opaqueRects().some(rect =>
+      pointer.x >= rect.left - HIT_PAD && pointer.x <= rect.right + HIT_PAD &&
+      pointer.y >= rect.top - HIT_PAD && pointer.y <= rect.bottom + HIT_PAD);
+    const ignore = !hit;
+    if (ignore === ignoringMouse) return;
+    ignoringMouse = ignore;
+    window.tasknav.setIgnoreMouse(ignore);
+  }
+
+  function pointerLeft() {
+    if (!pointer.inside) return;
+    pointer.inside = false;
+    refreshHitRegion();
+  }
+
+  window.addEventListener('mousemove', event => {
+    pointer.x = event.clientX;
+    pointer.y = event.clientY;
+    pointer.inside = true;
+    refreshHitRegion();
+  }, true);
+  window.addEventListener('mouseout', event => {
+    if (!event.relatedTarget) pointerLeft();
+  }, true);
+  document.addEventListener('mouseleave', pointerLeft);
 
   function applyModeClass(mode) {
     document.body.className = `${mode}-mode`;
     appliedMode = mode;
+    refreshHitRegion();
   }
 
+  // One synchronous class swap. No window resize, no waiting on the main
+  // process, so a mode switch can never be seen half-applied.
   function setMode(mode) {
-    if (!window.tasknav || !window.tasknav.setWindowMode) {
-      applyModeClass(mode);
-      return;
-    }
-    const growing = (MODE_WIDTH[mode] || 0) > (MODE_WIDTH[appliedMode] || 0);
-    if (growing) {
-      // Lay out the wider UI before the frame widens, otherwise the extra
-      // width paints as empty background for a few frames (visible flash).
-      pendingMode = null;
-      applyModeClass(mode);
-      window.tasknav.setWindowMode(mode);
-      return;
-    }
-    // Shrinking: narrow the frame first, then drop the wider layout.
-    pendingMode = mode;
-    window.tasknav.setWindowMode(mode);
-    setTimeout(() => {
-      if (pendingMode === mode) {
-        applyModeClass(mode);
-        pendingMode = null;
-      }
-    }, 260);
-  }
-
-  if (window.tasknav && window.tasknav.onWindowModeApplied) {
-    window.tasknav.onWindowModeApplied(mode => {
-      if (pendingMode === mode) {
-        applyModeClass(mode);
-        pendingMode = null;
-      }
-    });
+    applyModeClass(mode);
+    if (window.tasknav && window.tasknav.setWindowMode) window.tasknav.setWindowMode(mode);
   }
 
   function setConn(connected) {
@@ -499,7 +522,7 @@
     renderPicker();
   }
 
-  $('#rail').addEventListener('pointerdown', event => { if (!(event.target.closest && event.target.closest('.rail-drag'))) setMode('list'); });
+  $('#rail').addEventListener('pointerdown', () => setMode('list'));
   $('#collapseBtn').addEventListener('click', () => { state.selectedId = null; setMode('rail'); });
   $('#hideBtn').addEventListener('click', () => { if (window.tasknav) window.tasknav.hideWindow(); });
   $('#detailClose').addEventListener('click', closeDetail);

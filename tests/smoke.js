@@ -86,8 +86,10 @@ async function main() {
   assert(rendererSource.includes('本次判断消耗') && rendererSource.includes("task.token || '0'"), 'detail shows evaluation token usage');
   assert(rendererSource.includes("evidenceHtml(task), false"), 'judgment evidence is collapsed by default');
   assert(rendererSource.includes('evidence-summary') && rendererSource.includes('缺少可核验的证据'), 'evidence reads as a plain-language judgment explanation');
-  assert(mainSource.includes('detail: { width: 680'), 'detail window keeps both panels the same width as the task list');
-  assert(mainSource.includes("rail: { width: 72, height: 84 }"), 'collapsed rail is compact top to bottom');
+  assert(mainSource.includes('OVERLAY_WIDTH = 680') && !mainSource.includes('win.setBounds({ x, y, width, height })'), 'the overlay frame keeps one fixed size so a mode switch never resizes the OS window');
+  assert(mainSource.includes('setIgnoreMouseEvents') && rendererSource.includes('refreshHitRegion'), 'transparent parts of the fixed overlay stay click-through');
+  assert(!rendererSource.includes('pendingMode') && rendererSource.includes('function setMode'), 'mode switches apply their CSS synchronously instead of waiting on the main process');
+  assert(rendererStyles.includes('width: 72px') && rendererStyles.includes('height: 84px'), 'collapsed rail stays a compact 72x84 badge');
   assert(rendererStyles.includes('height: 14px;') && rendererStyles.includes('width: 42px;'), 'collapsed rail trims vertical padding around the icon');
   assert(rendererStyles.includes('body.detail-mode .panel.detail { width: 340px; }'), 'detail panel matches the 340px task card width');
   assert(!rendererSource.includes('>复制并处理</button>'), 'list never copies an unseen suggestion');
