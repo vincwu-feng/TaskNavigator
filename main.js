@@ -7,46 +7,116 @@ const MODES = {
   detail: { width: 680, height: null }
 };
 
+// How far above the taskbar the collapsed puck sits the very first time.
+const RAIL_BOTTOM_GAP = 28;
+
 let win = null;
 let currentMode = 'rail';
+
+// Where the user last dragged the widget to. Recomputing the position from the
+// screen edge on every mode switch is what used to teleport the puck back to
+// the bottom-right corner after expanding and collapsing again.
+//
+// The puck and the expanded panels are remembered separately because they are
+// different shapes: the puck is a small free-floating icon that can sit
+// anywhere, while the panels are full-height columns whose only free coordinate
+// is horizontal. A single stored point cannot describe both.
+let railPos = null;    // top-left corner of the collapsed puck
+let panelRight = null; // right edge of the expanded panels; null = follow the puck
+
+// The bounds we set ourselves, so the 'moved' handler can tell our own resizing
+// apart from the user actually dragging the window somewhere new.
+let lastPlaced = null;
 
 function workArea() {
   return screen.getPrimaryDisplay().workArea;
 }
 
-function placeWindow(mode) {
-  if (!win) return;
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function defaultRailPos() {
+  const area = workArea();
+  return {
+    x: area.x + area.width - MODES.rail.width,
+    y: area.y + area.height - MODES.rail.height - RAIL_BOTTOM_GAP
+  };
+}
+
+// Every position is clamped to the current work area, so a remembered spot can
+// never strand the window off-screen after the taskbar moves or the resolution
+// changes.
+function targetBounds(mode) {
   const area = workArea();
   const spec = MODES[mode];
   const width = spec.width;
   const height = spec.height || area.height;
-  const x = area.x + area.width - width;
-  const y = area.y + (mode === 'rail' ? area.height - spec.height - 28 : 0);
-  win.setBounds({ x, y, width, height });
+  if (mode === 'rail') {
+    const pos = railPos || defaultRailPos();
+    return {
+      width,
+      height,
+      x: clamp(pos.x, area.x, area.x + area.width - width),
+      y: clamp(pos.y, area.y, area.y + area.height - height)
+    };
+  }
+  // Expanded panels are full height, so only the horizontal anchor is free.
+  // Until the user drags a panel they open from wherever the puck currently is,
+  // which keeps the widget where the eye already is instead of jumping to the
+  // far side of the screen.
+  const railRight = (railPos || defaultRailPos()).x + MODES.rail.width;
+  const right = panelRight == null ? railRight : panelRight;
+  return {
+    width,
+    height,
+    x: clamp(right - width, area.x, area.x + area.width - width),
+    y: area.y
+  };
 }
 
-let revealTimer = null;
+function placeWindow(mode) {
+  if (!win || win.isDestroyed()) return;
+  const bounds = targetBounds(mode);
+  lastPlaced = bounds;
+  win.setBounds(bounds);
+}
 
-// Switching modes resizes the frame. On Windows the newly exposed strip is
-// filled with the window background before Chromium can raster content at the
-// new size, and that intermediate state is what reads as a flash. Hiding the
-// frame across the resize and revealing it only once the renderer reports a
-// painted frame means the user never sees a partially drawn panel.
+// Called on every 'moved' event, which fires both for our own setBounds and for
+// a real drag. Comparing against the last placement is what separates the two.
+function rememberPosition() {
+  if (!win || win.isDestroyed()) return;
+  const bounds = win.getBounds();
+  const ours = lastPlaced
+    && bounds.x === lastPlaced.x && bounds.y === lastPlaced.y
+    && bounds.width === lastPlaced.width && bounds.height === lastPlaced.height;
+  if (ours) return;
+  if (currentMode === 'rail') {
+    railPos = { x: bounds.x, y: bounds.y };
+    // The panels were opening from wherever the puck was; keep doing that from
+    // its new home rather than from the corner it no longer lives in.
+    panelRight = null;
+  } else {
+    panelRight = bounds.x + bounds.width;
+  }
+}
+
+// Resize the frame first, then tell the renderer to lay out for the new size.
+// This ordering is what matters: if the wider layout is applied while the
+// window is still narrow, 680px of panels get squeezed into a 340px viewport
+// for one frame and the task list visibly jumps sideways. Resizing first means
+// the strip that Windows exposes is painted with the window background, which
+// is deliberately the exact panel colour (#161922), so the widening frame just
+// looks like an empty panel until the content lands.
+//
+// Do NOT make the window invisible across the resize (zero opacity, or hide).
+// That does remove the half-painted frame, but blanking a panel that is already
+// on screen is itself perceived as a flash: it reads as the panel blinking out
+// and back in.
 function applyMode(mode) {
   if (!win || win.isDestroyed()) return;
-  win.setOpacity(0);
   placeWindow(mode);
   win.webContents.send('window-mode-applied', mode);
-  clearTimeout(revealTimer);
-  // Fallback: never leave the window invisible if the renderer stays silent.
-  revealTimer = setTimeout(() => revealMode(mode), 250);
-}
-
-function revealMode(mode) {
-  clearTimeout(revealTimer);
-  if (!win || win.isDestroyed()) return;
-  if (currentMode !== mode) return;
-  win.setOpacity(1);
 }
 
 function createWindow() {
@@ -71,6 +141,7 @@ function createWindow() {
   });
   win.setAlwaysOnTop(true, 'screen-saver');
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.on('moved', rememberPosition);
   win.once('ready-to-show', () => {
     win.show();
     win.focus();
@@ -101,9 +172,6 @@ if (!gotLock) {
       if (!MODES[mode]) return;
       currentMode = mode;
       applyMode(mode);
-    });
-    ipcMain.on('window-mode-painted', (_e, mode) => {
-      revealMode(mode);
     });
     ipcMain.on('window-hide', () => {
       win.hide();

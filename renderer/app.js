@@ -6,6 +6,8 @@
   };
   let appliedMode = 'rail';
   let toastTimer;
+  let lastListHtml = null;
+  let lastDetailHtml = null;
 
   const $ = selector => document.querySelector(selector);
   const listEl = $('#taskList');
@@ -96,14 +98,9 @@
   }
 
   if (window.tasknav && window.tasknav.onWindowModeApplied) {
-    window.tasknav.onWindowModeApplied(mode => {
-      applyModeClass(mode);
-      // Two frames: the first commits the new layout, the second guarantees it
-      // has actually been rastered before the window becomes visible again.
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (window.tasknav.notifyModePainted) window.tasknav.notifyModePainted(mode);
-      }));
-    });
+    // The frame has already been resized at this point, so laying out now can
+    // never squeeze the panels into a too-narrow viewport.
+    window.tasknav.onWindowModeApplied(mode => applyModeClass(mode));
   }
 
   function setConn(connected) {
@@ -166,6 +163,16 @@
     return 'ok';
   }
 
+  // Toggling the highlight must not rebuild the list. Assigning listEl.innerHTML
+  // destroys and recreates every card, including its <img> icons, and that
+  // re-decode is what read as a flash when opening a task. Flipping one class
+  // keeps the existing nodes (and their decoded images) untouched.
+  function markSelected() {
+    listEl.querySelectorAll('.task').forEach(element => {
+      element.classList.toggle('selected', String(element.dataset.id) === String(state.selectedId));
+    });
+  }
+
   function render() {
     $('#tabActive').classList.toggle('active', state.view === 'active');
     $('#tabArchived').classList.toggle('active', state.view === 'archived');
@@ -188,11 +195,12 @@
           <div class="arch-actions"><button data-restore="${esc(task.id)}">恢复监控</button><button data-goto="${esc(task.id)}">打开会话</button><button class="danger" data-delete="${esc(task.id)}">删除</button></div>
         </div>`).join('') : '<div class="empty-state"><strong>暂无归档记录</strong><span>归档后的会话会显示在这里。</span></div>';
       bindArchived();
+      lastListHtml = null;
       return;
     }
 
     const tasks = sortedTasks();
-    listEl.innerHTML = tasks.length ? tasks.map(task => {
+    const html = tasks.length ? tasks.map(task => {
       const visual = meta(task.status);
       const copyText = suggestionText(task);
       const turn = latestTurn(task) || {};
@@ -212,6 +220,16 @@
         <div class="task-links"><button data-detail="${esc(task.id)}">查看详情 →</button><button data-goto="${esc(task.id)}">前往会话 ↗</button></div>
       </div>`;
     }).join('') : '<div class="empty-state"><strong>还没有监控任何会话</strong><span>选择一个 Codex 或 Claude Code 会话，每轮回复后自动帮你检查。</span><button id="emptyBind">选择会话</button></div>';
+    // The daemon pushes an event after every evaluated turn and refresh() calls
+    // render() each time. Rewriting identical markup would still destroy and
+    // rebuild every card (and re-decode its icons), which shows up as a flash
+    // while the user is reading. Only touch the DOM when something changed.
+    if (html === lastListHtml) {
+      markSelected();
+      return;
+    }
+    lastListHtml = html;
+    listEl.innerHTML = html;
     bindList();
     if ($('#emptyBind')) $('#emptyBind').addEventListener('click', showSessionPicker);
   }
@@ -248,7 +266,15 @@
 
   function markRead(id) {
     const task = state.tasks.find(item => String(item.id) === String(id));
-    if (task && task.unread) api(`/api/tasks/${id}/read`, { method: 'POST' }).then(refresh).catch(() => {});
+    if (!task || !task.unread) return;
+    // Update local state and drop just the dot. Calling refresh() here would
+    // re-render the whole list immediately after opening the task.
+    task.unread = false;
+    const card = listEl.querySelector(`.task[data-id="${String(id).replace(/"/g, '\\"')}"] .unread-dot`);
+    if (card) card.remove();
+    // The cached markup still contains the dot we just deleted.
+    lastListHtml = null;
+    api(`/api/tasks/${id}/read`, { method: 'POST' }).catch(() => {});
   }
 
   function writeSuggestion(task) {
@@ -346,7 +372,7 @@
     const evidence = task.lastEvidence || {};
     const evidenceCount = (evidence.file_changes || []).length + (evidence.tests || []).length + (evidence.missing_evidence || []).length;
     const isReferential = turn.prompt_type === 'referential';
-    detailBody.innerHTML = `
+    const html = `
       <div class="detail-nav"><button class="back" id="backBtn">‹ 返回</button><div class="detail-meta"><span>本次判断消耗 ${esc(task.token || '0')} tokens</span><span>${esc(relativeTime(task.updatedAt))}更新</span></div></div>
       <div class="detail-title"><img class="source-icon" src="${sourceIcon(task)}" alt="${sourceLabel(task)}"><span>${esc(task.sessionTitle)}</span></div>
       <section class="decision ${visual.cls} ${task.status === 'ok' ? 'compact' : ''}">
@@ -371,6 +397,15 @@
         ${diagnostic(task, 'conversation', '最近几轮对话', `${(task.intentChain || []).length}轮`, chainHtml(task), isReferential)}
         ${diagnostic(task, 'history', '完整问答记录', `${(task.history || []).length}次`, historyHtml(task), false)}
       </div>`;
+    // Same reasoning as the task list: a daemon event arrives after every
+    // evaluated turn, and rewriting identical detail markup would collapse the
+    // open <details> sections and re-decode the avatars mid-read.
+    // The #backBtn check makes the cache self-verifying: the session picker also
+    // writes into detailBody, so an unchanged task must still be repainted if
+    // what is currently on screen is not the detail view.
+    if (html === lastDetailHtml && detailBody.querySelector('#backBtn')) return;
+    lastDetailHtml = html;
+    detailBody.innerHTML = html;
     $('#backBtn').addEventListener('click', closeDetail);
     if ($('#copyOpenBtn')) $('#copyOpenBtn').addEventListener('click', () => copyAndOpen(task.id));
     if ($('#copyBtn')) $('#copyBtn').addEventListener('click', () => copySuggestion(task.id));
@@ -387,7 +422,7 @@
     state.detailOpen = new Set();
     const turn = latestTurn(task);
     if (turn && turn.prompt_type === 'referential') state.detailOpen.add('conversation');
-    render();
+    markSelected();
     renderDetail(task);
     markRead(id);
     setMode('detail');
@@ -395,8 +430,9 @@
 
   function closeDetail() {
     state.selectedId = null;
+    lastDetailHtml = null;
     state.detailOpen = new Set();
-    render();
+    markSelected();
     setMode('list');
   }
 
@@ -429,6 +465,7 @@
 
   function renderPlatformStep() {
     state.pickerPlatform = null;
+    lastDetailHtml = null;
     detailBody.innerHTML = `<button class="back" id="bindBack">‹ 取消</button><div class="picker-title">选择要监控的平台</div><div class="picker-subtitle">先选择 AI 助手，再选择要监控的会话</div><div class="platform-grid">${PLATFORMS.map(platform => `<button class="platform-option" data-platform="${platform.id}"><img src="${platform.icon}" alt="${platform.name}"><span class="p-name">${platform.name}</span><span class="p-desc">${platform.desc}</span></button>`).join('')}</div>`;
     $('#bindBack').addEventListener('click', closeDetail);
     detailBody.querySelectorAll('[data-platform]').forEach(button => button.addEventListener('click', async () => {

@@ -3,7 +3,6 @@ const { contextBridge, ipcRenderer, clipboard } = require('electron');
 contextBridge.exposeInMainWorld('tasknav', {
   setWindowMode: mode => ipcRenderer.send('window-mode', mode),
   onWindowModeApplied: cb => ipcRenderer.on('window-mode-applied', (_e, mode) => cb(mode)),
-  notifyModePainted: mode => ipcRenderer.send('window-mode-painted', mode),
   hideWindow: () => ipcRenderer.send('window-hide'),
   copyText: text => ipcRenderer.send('copy-text', String(text || '')),
   openCodexThread: threadId => ipcRenderer.invoke('open-codex-thread', String(threadId || '')),
