@@ -239,7 +239,7 @@ async function evaluateLatestTurn(task, opts, config, store, broadcast) {
   const promptType = rule.prompt_type_hint;
   const currentIntent = llm.intent || truncate(evidence.user_request, 240) || '未识别到本轮意图';
   const reason = localOverride ? fallback.reason : (llm.reason || fallback.reason);
-  const suggest = llm.suggest || fallback.suggest;
+  const suggest = localOverride ? fallback.suggest : (llm.suggest || fallback.suggest);
   const summary = evidenceSummary(rule);
   const chainEntry = {
     turn_id: turn.id,

@@ -270,7 +270,7 @@ async function main() {
   appendTurn('现在怎么样', '还在处理中。');
   const idle2 = await request('POST', `/api/tasks/${taskId}/evaluate`, { transcript_path: fixturePath });
   assert(idle2.data.task.status === 'warn' && idle2.data.task.noProgressTurns === 2, 'two empty turns produce no-progress streak');
-  assert(idle2.data.task.suggest === '请对照我本轮的要求，说明已经做到什么、还差什么，并给出下一步具体结果。', 'Dify suggest is shown even for no-progress turns');
+  assert(idle2.data.task.suggest === '已连续 2 轮无实质输出，请说明当前卡点、已验证事实和下一步动作。', 'localOverride uses fallback suggest for no-progress turns');
 
   appendTurn('还是不对，再改改', '我调整了交互节奏并给出了具体修改结果。', [
     { id: 'p2', name: 'apply_patch', arguments: { input: '*** Begin Patch\n*** Update File: game.js\n+x\n*** End Patch' }, output: 'Done!' },
