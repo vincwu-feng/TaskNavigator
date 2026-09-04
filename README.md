@@ -23,6 +23,7 @@
 > **TaskNavigator 不替 AI 写代码，只做一件事：每轮回复后，用客观证据检查"这轮是真完成了，还是在糊弄你"。没完成，就弹一句"你该跟它说这句"，复制粘贴就能继续。**
 
 > **It doesn't write code and it doesn't review code. After every turn it asks one question using objective evidence: did the AI actually finish, or is it bluffing? If not, it hands you the exact sentence to send back.**
+<img width="2150" height="1336" alt="image" src="https://github.com/user-attachments/assets/1bb0c0e4-0ed8-4dd1-a6db-86d5c103c51b" />
 
 **核心痛点**：AI 每次交活都特别自信，结果一运行全是坑——光判断它到底做完没就得耗半天。
 
