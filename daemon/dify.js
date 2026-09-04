@@ -12,7 +12,10 @@ async function runWorkflow(name, inputs, config) {
 
   const url = String(dify.baseUrl).replace(/\/+$/, '') + '/v1/workflows/run';
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
+  // The evaluation workflow runs an LLM and has been measured at 7-18s, so a
+  // 15s ceiling aborted real runs and left rounds unevaluated.
+  const timeoutMs = Math.max(5000, Number(dify.timeoutMs) || 45000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       method: 'POST',

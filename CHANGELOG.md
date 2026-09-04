@@ -1,5 +1,37 @@
 ---
 
+## 2026-09-04 v0.5.6 - Fix transcript parsing and change detection
+
+**Modification type**: Bug fix
+**Modified by**: Codex AI Agent
+
+### Root cause
+
+1. **Parser mismatch** — Codex stopped writing `event_msg/user_message` in rollouts (2026-09-01+),
+   but the parser only keyed on that event to start a turn. All new sessions produced 0 turns
+   and were never evaluated.
+2. **Stale mtime** — Windows does not flush the file timestamp while the agent holds the handle,
+   so the monitor's `mtimeMs` gate missed new rounds. The monitor now uses `path:size` as the
+   change signal instead.
+3. **Dify timeout** — The evaluation workflow takes 7–18s but the abort was at 15s. Raised to
+   45s and made configurable via `dify.timeoutMs`.
+
+### Files changed
+
+| File | Operation | Detail |
+|------|-----------|--------|
+| daemon/transcript.js | Modified | `startTurn()` helper handles both `event_msg/user_message` and `response_item/message:user`; deduplicates when both exist for the same prompt. `findTranscript` ranks by `Math.max(mtimeMs, rolloutStartMs)` for correct fork ordering and returns `size`. |
+| daemon/index.js | Modified | Monitor gate changed from mtime to `path:size` signature; `JSON.stringify` comparison. |
+| daemon/store.js | Modified | Persists `lastTranscriptSignature` with migration fallback. |
+| daemon/dify.js | Modified | Timeout configurable via `dify.timeoutMs`; default 45s. |
+| daemon/config.js | Modified | `timeoutMs: 45000` added to defaults. |
+| daemon/claude-sessions.js | Modified | `findTranscript` returns `size` field. |
+| tests/smoke.js | Modified | 3 regression tests for new-format transcripts, dual-format dedup, and stale-mtime fork selection. |
+| package.json | Modified | v0.5.5 → v0.5.6; removed hardcoded repo URLs (users clone from GitHub directly). |
+| README.md | Modified | Restored truncated header block; replaced placeholder clone URLs with generic instructions. |
+| skills/tasknavigator/SKILL.md | Modified | Same placeholder → generic clone instruction. |
+---
+
 ## 2026-08-26 v0.5.5 - Move judged prompt into card context
 
 **Modification type**: UX

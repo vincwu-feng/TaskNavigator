@@ -123,7 +123,8 @@
 
 ```powershell
 # 1. 克隆
-git clone https://github.com/YOUR_USERNAME/TaskNavigator.git
+# 用本页 Code 按钮里的地址
+git clone <this-repo>.git
 cd TaskNavigator
 
 # 2. 安装依赖 + 生成配置（默认 mock 模式，零 key 可跑）
@@ -206,7 +207,7 @@ npm test
 本仓库同时是一个可安装的 Codex 技能：
 
 ```powershell
-git clone https://github.com/YOUR_USERNAME/TaskNavigator.git "$env:USERPROFILE\.codex\skills\tasknavigator"
+git clone <this-repo>.git "$env:USERPROFILE\.codex\skills\tasknavigator"
 ```
 
 之后对 Codex 说「帮我安装并启动 TaskNavigator」，它会按 [`skills/tasknavigator/SKILL.md`](./skills/tasknavigator/SKILL.md) 的指引完成安装。

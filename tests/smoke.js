@@ -4,7 +4,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { createApp, buildEvalInputs, normalizeEvalOutput, clearIncompleteTurnArtifacts } = require('../daemon/index');
 const { judgeTurn, classifyPrompt } = require('../daemon/judgment');
-const { parseTranscript, coreUserMessage } = require('../daemon/transcript');
+const { parseTranscript, coreUserMessage, findTranscript } = require('../daemon/transcript');
 const { migrateTask } = require('../daemon/store');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tasknav-test-'));
@@ -313,7 +313,50 @@ async function main() {
   const undone = await request('POST', `/api/tasks/${taskId}/undo-delete`);
   assert(undone.status === 200 && undone.data.task.id === taskId, 'deleted task can be immediately restored');
 
-  console.log('SMOKE PASS: turn cursor, evidence, intent chain, single eval, migration, UI APIs');
+  // Regression: Codex stopped emitting `event_msg/user_message` in 2026-09 and
+  // now records the prompt only as `response_item/message` role=user. A parser
+  // that keys on the event alone finds zero turns, so nothing is ever evaluated.
+  const modernId = 'smoke-modern-001';
+  const modernPath = path.join(sessionsDir, `rollout-2026-09-04T14-31-09-${modernId}.jsonl`);
+  fs.writeFileSync(modernPath, [
+    record('session_meta', { session_id: modernId, cwd: 'C:\\demo\\modern' }),
+    record('response_item', { type: 'message', role: 'user', content: [{ type: 'input_text', text: '看下有没有 bak 文件' }] }),
+    record('response_item', { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '有的，README.md.bak 存在。' }] }),
+    record('event_msg', { type: 'task_complete', last_agent_message: '有的，README.md.bak 存在。' })
+  ].join('\n') + '\n');
+  const modernParsed = parseTranscript(modernPath);
+  assert(modernParsed.turns.length === 1, 'response_item-only transcripts still produce a turn');
+  assert(modernParsed.turns[0].complete, 'response_item-only turn is recognised as complete');
+  assert(modernParsed.turns[0].user_prompt === '看下有没有 bak 文件', 'prompt is read from the response_item message');
+
+  // Regression: transcripts that carry both shapes of the same prompt must not
+  // be counted as two rounds.
+  const dualId = 'smoke-dual-001';
+  const dualPath = path.join(sessionsDir, `rollout-2026-08-30T14-09-00-${dualId}.jsonl`);
+  fs.writeFileSync(dualPath, [
+    record('session_meta', { session_id: dualId, cwd: 'C:\\demo\\dual' }),
+    record('response_item', { type: 'message', role: 'user', content: [{ type: 'input_text', text: '同一个问题' }] }),
+    record('event_msg', { type: 'user_message', message: '同一个问题' }),
+    record('response_item', { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: '答完了。' }] }),
+    record('event_msg', { type: 'task_complete', last_agent_message: '答完了。' })
+  ].join('\n') + '\n');
+  const dualParsed = parseTranscript(dualPath);
+  assert(dualParsed.turns.length === 1, 'a prompt written in both shapes counts as one turn');
+
+  // Regression: Windows leaves a rollout's mtime stale while Codex holds the
+  // handle, so the newest file of a thread must be picked by its filename
+  // timestamp and change must be detected by size rather than mtime.
+  const forkId = 'smoke-fork-001';
+  const oldFork = path.join(sessionsDir, `rollout-2026-09-04T10-00-00-${forkId}.jsonl`);
+  const newFork = path.join(sessionsDir, `rollout-2026-09-04T18-00-00-${forkId}.jsonl`);
+  fs.writeFileSync(oldFork, record('session_meta', { session_id: forkId, cwd: 'C:\\demo\\fork' }) + '\n');
+  fs.writeFileSync(newFork, record('session_meta', { session_id: forkId, cwd: 'C:\\demo\\fork' }) + '\n');
+  const staleTime = new Date(Date.now() - 60 * 60 * 1000);
+  fs.utimesSync(newFork, staleTime, staleTime);
+  const picked = findTranscript(sessionsDir, forkId);
+  assert(picked && picked.path === newFork, 'newest rollout wins even when its mtime is stale');
+  assert(typeof picked.size === 'number', 'findTranscript reports size so growth can be detected without mtime');
+  console.log('SMOKE PASS: turn cursor, evidence, intent chain, single eval, migration, transcript formats, stale mtime, UI APIs');
   app.server.close();
   fs.rmSync(TMP, { recursive: true, force: true });
 }

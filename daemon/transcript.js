@@ -69,6 +69,37 @@ function parseTranscript(filePath) {
     turns.push(currentTurn);
     currentTurn = null;
   };
+  // A round starts at the user's message. Codex records that message either as
+  // an `event_msg/user_message` event (transcripts up to 2026-08) or only as a
+  // `response_item/message` with role=user (2026-09 and later). Both shapes must
+  // be able to open a turn, and transcripts carrying both must not double count.
+  const startTurn = (lineIndex, rawText) => {
+    const text = String(rawText || '').trim();
+    const clean = coreUserMessage(text);
+    if (!clean || isContextText(text)) return;
+    if (currentTurn
+      && currentTurn.user_prompt === clean
+      && !currentTurn.assistant_messages.length
+      && !currentTurn.tool_calls.length) {
+      // The same prompt written in both shapes: keep the already open turn.
+      return;
+    }
+    finishTurn(lineIndex, { closedByNextUser: true });
+    userMessages.push(clean);
+    currentTurn = {
+      id: '',
+      start_line: lineIndex + 1,
+      end_line: lineIndex + 1,
+      user_prompt: clean,
+      assistant_messages: [],
+      final_messages: [],
+      legacy_messages: [],
+      assistant_final: '',
+      tool_calls: [],
+      tool_outputs: [],
+      complete: false
+    };
+  };
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const line = lines[lineIndex];
     let obj;
@@ -85,25 +116,7 @@ function parseTranscript(filePath) {
       continue;
     }
     if (obj.type === 'event_msg' && p.type === 'user_message') {
-      const text = String(p.message || '').trim();
-      const clean = coreUserMessage(text);
-      if (clean && !isContextText(text)) {
-        finishTurn(lineIndex, { closedByNextUser: true });
-        userMessages.push(clean);
-        currentTurn = {
-          id: '',
-          start_line: lineIndex + 1,
-          end_line: lineIndex + 1,
-          user_prompt: clean,
-          assistant_messages: [],
-          final_messages: [],
-          legacy_messages: [],
-          assistant_final: '',
-          tool_calls: [],
-          tool_outputs: [],
-          complete: false
-        };
-      }
+      startTurn(lineIndex, String(p.message || ''));
       continue;
     }
     if (obj.type === 'event_msg' && p.type === 'task_complete') {
@@ -117,7 +130,9 @@ function parseTranscript(filePath) {
     if (p.type === 'message') {
       const text = contentText(p.content).trim();
       if (!text) continue;
-      if (p.role === 'assistant') {
+      if (p.role === 'user') {
+        startTurn(lineIndex, text);
+      } else if (p.role === 'assistant') {
         if (currentTurn) currentTurn.assistant_messages.push(text);
         if (p.phase === 'final_answer') {
           assistantMessages.push(text);
@@ -157,6 +172,17 @@ function parseTranscript(filePath) {
   return { sessionId, cwd, title, userMessages, assistantMessages, toolCalls, toolOutputs, turns };
 }
 
+// Windows does not flush a file's mtime while Codex still holds the handle, so
+// the newest rollout of a thread cannot be ranked by mtime alone. The rollout
+// filename carries the start timestamp, which is always ordered correctly.
+function rolloutStartMs(fileName) {
+  const m = String(fileName).match(/rollout-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})/);
+  if (!m) return 0;
+  const [, y, mo, d, h, mi, sec] = m;
+  const ms = new Date(Number(y), Number(mo) - 1, Number(d), Number(h), Number(mi), Number(sec)).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 function findTranscript(sessionsDir, sessionId) {
   if (!sessionId || !fs.existsSync(sessionsDir)) return null;
   let best = null;
@@ -172,13 +198,19 @@ function findTranscript(sessionsDir, sessionId) {
       if (entry.isDirectory()) {
         walk(full);
       } else if (entry.name.includes(sessionId) && entry.name.endsWith('.jsonl')) {
-        let mtime = 0;
+        let stat;
         try {
-          mtime = fs.statSync(full).mtimeMs;
+          stat = fs.statSync(full);
         } catch {
           continue;
         }
-        if (!best || mtime > best.mtimeMs) best = { path: full, mtimeMs: mtime };
+        const candidate = {
+          path: full,
+          mtimeMs: stat.mtimeMs,
+          size: stat.size,
+          rank: Math.max(stat.mtimeMs, rolloutStartMs(entry.name))
+        };
+        if (!best || candidate.rank > best.rank) best = candidate;
       }
     }
   };
@@ -262,4 +294,4 @@ function coreUserMessage(text) {
   return clean.replace(/\s+/g, ' ').trim();
 }
 
-module.exports = { parseTranscript, findTranscript, latestSessions, isContextText, sessionTitle, coreUserMessage };
+module.exports = { parseTranscript, findTranscript, latestSessions, isContextText, sessionTitle, coreUserMessage, rolloutStartMs };

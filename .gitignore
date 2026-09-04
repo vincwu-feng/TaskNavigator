@@ -7,6 +7,9 @@ data/
 # local configuration (contains your Dify API key)
 config.json
 
+# local backups
+*.bak
+
 # logs
 *.log
 npm-debug.log*

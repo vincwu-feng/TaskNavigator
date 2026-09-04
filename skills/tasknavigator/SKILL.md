@@ -74,9 +74,9 @@ TaskNavigator 是一个桌面停靠条（Electron app + Node daemon），绑定�
 ### 快速安装（在 Codex 中执行）
 
 ```powershell
-# 1. Clone 仓库
+# 1. Clone 仓库（地址见仓库页面的 Code 按钮）
 cd ~
-git clone https://github.com/YOUR_USERNAME/TaskNavigator.git
+git clone <this-repo>.git
 cd TaskNavigator
 
 # 2. 安装依赖 + 创建配置

@@ -1,6 +1,6 @@
 {
   "name": "tasknavigator",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "A desktop dock that acts as a second pair of eyes on Codex / Claude Code replies: it judges every turn against what you actually asked for.",
   "main": "main.js",
   "keywords": [
@@ -12,14 +12,6 @@
     "developer-tools"
   ],
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/YOUR_USERNAME/TaskNavigator.git"
-  },
-  "bugs": {
-    "url": "https://github.com/YOUR_USERNAME/TaskNavigator/issues"
-  },
-  "homepage": "https://github.com/YOUR_USERNAME/TaskNavigator#readme",
   "engines": {
     "node": ">=18"
   },

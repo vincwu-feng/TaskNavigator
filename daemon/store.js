@@ -68,6 +68,7 @@ function create(dataDir) {
       lastEvaluatedTurnId: data.lastEvaluatedTurnId || '',
       lastEvaluatedAssistantFinal: data.lastEvaluatedAssistantFinal || '',
       lastTranscriptMtime: Number(data.lastTranscriptMtime || 0),
+      lastTranscriptSignature: String(data.lastTranscriptSignature || ''),
       history: [],
       createdAt: now,
       updatedAt: now
@@ -169,6 +170,7 @@ function migrateTask(task) {
   task.lastEvaluatedTurnId = task.lastEvaluatedTurnId || '';
   task.lastEvaluatedAssistantFinal = task.lastEvaluatedAssistantFinal || '';
   task.lastTranscriptMtime = Number(task.lastTranscriptMtime || 0);
+  task.lastTranscriptSignature = String(task.lastTranscriptSignature || '');
   const seenTurns = new Set();
   task.history = Array.isArray(task.history) ? task.history
     .filter(item => item && item.turn_id)

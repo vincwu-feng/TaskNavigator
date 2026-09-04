@@ -347,7 +347,7 @@ function createApp(config) {
       return response.end();
     }
     if (method === 'GET' && parts[0] === 'api' && parts[1] === 'health') {
-      return sendJson(response, 200, { ok: true, mock: config.dify.mock, version: '0.5.5' });
+      return sendJson(response, 200, { ok: true, mock: config.dify.mock, version: '0.5.6' });
     }
     if (method === 'GET' && parts[0] === 'api' && parts[1] === 'state') {
       return sendJson(response, 200, Object.assign({ daemon: { online: true, mock: config.dify.mock, port: config.port } }, store.snapshot()));
@@ -425,7 +425,8 @@ function createApp(config) {
         intentChain: seedIntentChain(parsed),
         lastEvaluatedTurnId: '',
         lastEvaluatedAssistantFinal: '',
-        lastTranscriptMtime: found.mtimeMs
+        lastTranscriptMtime: found.mtimeMs,
+        lastTranscriptSignature: `${found.path}:${Number(found.size || 0)}`
       });
       broadcast('task-created', { taskId: task.id });
       const result = await evaluateLatestTurn(task, {
@@ -433,6 +434,7 @@ function createApp(config) {
         transcript_path: found.path
       }, config, store, broadcast);
       task.lastTranscriptMtime = found.mtimeMs;
+      task.lastTranscriptSignature = `${found.path}:${Number(found.size || 0)}`;
       store.save();
       return sendJson(response, 200, { task: result.task || task, evaluated: result.handled === true });
     }
@@ -499,12 +501,18 @@ function startBoundSessionMonitor(app, config) {
         const found = task.source === 'claude'
           ? claudeSessions.findTranscript(config.claudeHome, task.sessionId)
           : transcript.findTranscript(config.sessionsDir, task.sessionId);
-        if (!found || !found.mtimeMs || found.mtimeMs <= Number(task.lastTranscriptMtime || 0)) continue;
+        if (!found) continue;
+        // Windows keeps a stale mtime while the agent still holds the rollout
+        // open, so growth in file size (or a switch to another rollout file of
+        // the same thread) is what reliably signals a new round.
+        const signature = `${found.path}:${Number(found.size || 0)}`;
+        if (signature === String(task.lastTranscriptSignature || '')) continue;
         try {
           await evaluateLatestTurn(task, { session_id: task.sessionId, transcript_path: found.path }, config, app.store, app.broadcast);
         } catch (err) {
           console.warn(`[monitor] task ${task.id} failed:`, err.message);
         } finally {
+          task.lastTranscriptSignature = signature;
           task.lastTranscriptMtime = found.mtimeMs;
           app.store.save();
         }

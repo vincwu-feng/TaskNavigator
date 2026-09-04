@@ -18,7 +18,8 @@ function defaults() {
       baseUrl: 'http://127.0.0.1:8800',
       apiKeys: { eval: '' },
       mock: true,
-      fallbackToMock: true
+      fallbackToMock: true,
+      timeoutMs: 45000
     }
   };
 }

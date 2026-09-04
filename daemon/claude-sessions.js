@@ -134,8 +134,8 @@ function findTranscript(claudeHome, sessionId) {
         walk(full);
       } else if (entry.name === `${sessionId}.jsonl`) {
         try {
-          const mtime = fs.statSync(full).mtimeMs;
-          if (!best || mtime > best.mtimeMs) best = { path: full, mtimeMs: mtime };
+          const stat = fs.statSync(full);
+          if (!best || stat.mtimeMs > best.mtimeMs) best = { path: full, mtimeMs: stat.mtimeMs, size: stat.size };
         } catch {
           // unreadable
         }
